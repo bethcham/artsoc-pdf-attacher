@@ -20,27 +20,31 @@ def process_pdf(pdf_file, csv_file, output_dir):
 
     for index, row in df.iterrows():
         quantity = row['Quantity']
+        quantity = int(quantity)
         first_name = row['First Name']
 
         seat_numbers  = []
 
-        for seat in quantity:
+        for seat in range(1, quantity + 1):
             seat_col = f"Seat {seat}"
             seat_numbers.append(row[seat_col].strip())
+            seat_name = row[seat_col].strip()
 
-            if seat in used_seats:
-                print(f"Warning: Duplicate seat number '{seat}' for {first_name}")
+            if seat_name in used_seats:
+                print(f"Warning: Duplicate seat number '{seat_name}' for {first_name}")
             else:
-                used_seats.add(seat)
+                used_seats.add(seat_name)
             
             if pd.isna(row[seat_col]):
-                print(f"Warning: Seat {seat_col} is empty for {first_name}")
-
-            output_pdf(pdf_reader, page_index, first_name, seat_numbers[seat], output_dir, show_name)
-            page_index += 1 
+                print(f"Warning: Seat {seat_name} is empty for {first_name}")
 
             if page_index >= len(pdf_reader.pages):
                 raise IndexError("Page index exceeds the number of pages in the PDF.") 
+            
+            output_pdf(pdf_reader, page_index, first_name, seat_numbers[seat-1], output_dir, show_name)
+            page_index += 1 
+            
+    input("Please check files to ensure they are correct. Press any key to continue...")
 
 def output_pdf(pdf_reader, page_index, first_name, seat, output_dir, show_name):
     pdf_writer = PdfWriter()

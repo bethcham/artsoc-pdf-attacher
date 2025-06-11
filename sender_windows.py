@@ -1,7 +1,9 @@
-import os
-import re
 from csv import reader
-from email.message import EmailMessage
+import win32com.client
+import os
+import tempfile
+import shutil
+import re
 
 def render_email(template_content, show_name, location, committee, theatre_time, meet_up, library_time=None, committee2=None):
     email = template_content
@@ -14,12 +16,7 @@ def render_email(template_content, show_name, location, committee, theatre_time,
         email = email.replace('{Committee2}', committee2)
     return email
 
-def strip_html_tags(html):
-    # Remove HTML tags for a plain text preview
-    return re.sub('<[^<]+?>', '', html)
-
-def natural_sort_key(s):
-    import re
+def natural_sort_key(s): # makes sure the order is A1, A2, ... , A10 etc
     return [int(text) if text.isdigit() else text.lower()
             for text in re.split(r'([0-9]+)', s)]
 
@@ -33,36 +30,47 @@ def input_yes_no(prompt):
 def get_sorted_ticket_files(ticket_folder):
     files = [f for f in os.listdir(ticket_folder) if f.endswith('.pdf')]
     files.sort(key=natural_sort_key)
+    # print("Files will be attached in this order:")
+    # for f in files:
+    #     print(f"  {f}")
+    # print()
     return files
 
-# Paths (adjust as needed)
-ticket_folder = "output_tickets"
-csv_path = "shop.csv"
-output_email_dir = "output_emails"
-os.makedirs(output_email_dir, exist_ok=True)
+outlook = win32com.client.Dispatch("Outlook.Application")
+namespace = outlook.GetNamespace("MAPI")
+
+# sender email address
+sender_email = "artsoc@imperial.ac.uk" 
+
+# specify folder with ticket PDFs
+ticket_folder = os.path.join(os.path.dirname(__file__), 'output_tickets')
+ticket_folder = os.path.abspath(ticket_folder)
 
 ticket_files = get_sorted_ticket_files(ticket_folder)
-available_tickets = ticket_files.copy()
+current_ticket_index = 0
 
+# take inputs from user
 show_name = input("Enter show name for email subject title (eg Phantom of the Opera): ")
 location = input("What theatre?: ")
 theatre_time = input("What time is the meet up for show? Leave 20 min before show starts (enter for default 7:10pm): ")
 if not theatre_time:
-    theatre_time = "7:10pm"
+    theatre_time = "7:10pm"  # default time if not specified
 meet_up = input_yes_no("Campus meet-up? (yes/no): ")
 
 subject = f"{show_name} tickets!"
+
 
 if meet_up:
     library_time = input("What time is the meet-up? Take the time to travel + 5 min waiting at library + 5 min buffer: ")
     committee = input("Which committee members will be at the library? (phrase like 'Beth, Justin, and Anh): ")
     committee2 = input("Which committee members will meet at the theatre?: ")
-    template_file = open("templates/email_library.html", "r")
+    template_file = open("templates/email_library.html", "r") 
 else:
     committee = input("Which committee members will be there?: ")
-    template_file = open("templates/email_theatre.html", "r")
+    template_file = open("templates/email_theatre.html", "r") # ensure email template is correct and updated
 
 general_email = template_file.read()
+
 # general_email = general_email.replace('{ShowName}', show_name)
 # general_email = general_email.replace('{Location}', location)
 # general_email = general_email.replace('{Committee}', committee)
@@ -75,9 +83,9 @@ general_email = template_file.read()
 while True:
     print("Final email draft: ")
     if meet_up:
-        print(strip_html_tags(render_email(general_email, show_name, location, committee, theatre_time, meet_up, library_time, committee2)))
+        print(render_email(general_email, show_name, location, committee, theatre_time, meet_up, library_time, committee2))
     else:
-        print(strip_html_tags(render_email(general_email, show_name, location, committee, theatre_time, meet_up)))
+        print(render_email(general_email, show_name, location, committee, theatre_time, meet_up))
     change_template = input_yes_no("Would you like to change the email? (yes/no)")
     if not change_template:
         break
@@ -103,60 +111,88 @@ general_email = general_email.replace('{Location}', location)
 general_email = general_email.replace('{Committee}', committee)
 general_email = general_email.replace('{Time}', theatre_time)
 
-customer_info_file = open(csv_path)
+if meet_up:
+    general_email = general_email.replace('{Time2}', library_time)
+    general_email = general_email.replace('{Committee2}', committee2)
+
+customer_info_file = open("shop.csv")
 customer_info_reader = reader(customer_info_file)
 customer_info_header = next(customer_info_reader)
 num_customer_header = len(customer_info_header)
 
 email_count = 0
 
+total_tickets_needed = 0
+for customer_info in reader(open("shop.csv")):
+    try:
+        quantity_index = customer_info_header.index("Quantity")
+        total_tickets_needed += int(customer_info[quantity_index])
+    except Exception:
+        # produce error and stop execution
+        print("Warning: error in customer info in quantity field: " + str(customer_info))
+
+if total_tickets_needed != len(ticket_files):
+    raise ValueError(f"ERROR: {len(ticket_files)} available, but {total_tickets_needed} needed.")
+
+available_tickets = ticket_files.copy()
+
+# custom email for each
 for customer_info in customer_info_reader:
     custom_email = general_email
-    address = ''
-    name = ''
-    num_tickets = 1
+    num_tickets = 1  # default to 1 ticket
     seat_numbers = []
 
+    # replace with custom name and email for each
     for i in range(num_customer_header):
-        header = customer_info_header[i]
-        value = customer_info[i]
-        if header == "Email":
-            address = value
-        elif header == "First Name":
-            name = value
-        elif header == "Quantity":
+        if (customer_info_header[i] == "Email"):
+            address = customer_info[i]
+        elif (customer_info_header[i] == "First Name"):
+            name = customer_info[i]
+        elif (customer_info_header[i] == "Quantity"):
             try:
-                num_tickets = int(value)
+                num_tickets = int(customer_info[i])
             except (ValueError, TypeError):
                 num_tickets = 1
-        elif header.lower().startswith("seat"):
-            seat_numbers.append(value)
-        custom_email = custom_email.replace('{' + header + '}', value)
+        elif customer_info_header[i].lower().startswith("seat"):
+            seat_numbers.append(customer_info[i])
 
-    if "noreply" in address.lower():
-        print(f"Skipping: Email address for {name} contains 'noreply': {address}")
-        continue
+        custom_email = custom_email.replace(
+            '{' + customer_info_header[i] + '}', customer_info[i])
+        
+        if name.lower() not in address.lower():
+            print(f"Warning: Name '{name}' does not appear in email '{address}'.")
+        if "noreply" in address.lower():
+            address = ""
 
-    if name.lower() not in address.lower():
-        print(f"Warning: Name '{name}' does not appear in email '{address}'.")
+    msg = outlook.CreateItem(0)
+    
+    for account in outlook.Session.Accounts:
+        if account.SmtpAddress == sender_email:
+            msg._oleobj_.Invoke(*(64209, 0, 8, 0, account))  # sets sender account, make sure you're logged in on outlook
+            break
 
-    # Create the email message
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = "artsoc@imperial.ac.uk"
-    msg['To'] = f'"{name}" <{address}>'
-    msg.set_content(custom_email, subtype='html')
+    msg.Subject = subject
+    msg.HTMLBody = custom_email
+    msg.To = f'"{name}" <{address}>'
 
-    # Attach correct tickets by matching name and seat in filename
+    # Add attachments based on number of tickets
     attached_files = []
+    # for _ in range(num_tickets):
+    #     if current_ticket_index < len(ticket_files):
+    #         ticket_path = os.path.join(ticket_folder, ticket_files[current_ticket_index])
+    #         if os.path.exists(ticket_path):
+    #             msg.Attachments.Add(ticket_path)
+    #             attached_files.append(ticket_files[current_ticket_index])
+    #             current_ticket_index += 1
+
     for seat in seat_numbers[:num_tickets]:
+        # Find ticket file matching both name and seat
         found = False
         for ticket_file in available_tickets:
             if name.lower() in ticket_file.lower() and seat and str(seat) in ticket_file:
                 ticket_path = os.path.join(ticket_folder, ticket_file)
                 if os.path.exists(ticket_path):
-                    with open(ticket_path, 'rb') as f:
-                        msg.add_attachment(f.read(), maintype='application', subtype='pdf', filename=ticket_file)
+                    msg.Attachments.Add(ticket_path)
                     attached_files.append(ticket_file)
                     available_tickets.remove(ticket_file)
                     found = True
@@ -164,16 +200,15 @@ for customer_info in customer_info_reader:
         if not found:
             print(f"Warning: No ticket found for {name} (seat {seat})")
 
-    # Save as .eml file
-    eml_filename = os.path.join(output_email_dir, f"{name}_{address}.eml".replace("/", "_"))
-    with open(eml_filename, 'wb') as eml_file:
-        eml_file.write(bytes(msg))
-
+    # saves as draft - go to outlook to check and send
+    msg.Save()
+    
     email_count += 1
-    print(f"Created email draft {email_count} for {address}")
+    print(f"created draft email {email_count} for {address}")
     print(f"  attached tickets: {', '.join(attached_files)}")
 
 template_file.close()
 customer_info_file.close()
 
-print(f"\nFinished creating {email_count} email drafts")
+print(f"\nFinished creating {email_count} draft emails")
+print(f"Used {current_ticket_index} tickets out of {len(ticket_files)} available")
