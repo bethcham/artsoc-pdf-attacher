@@ -91,7 +91,7 @@ while True:
         break
 
     else:
-        what_change = input("What would you like to change? /n a) Show name /n b) Location /n c) Committee members /n d) Theatre time: /n e) Library time (if applicable)").strip().lower()
+        what_change = input("What would you like to change? \n a) Show name \n b) Location \n c) Committee members \n d) Theatre time: \n e) Library time (if applicable)").strip().lower()
         if what_change == 'a':
             show_name = input("Enter new show name: ")
         elif what_change == 'b':
@@ -175,7 +175,6 @@ for customer_info in customer_info_reader:
     msg.HTMLBody = custom_email
     msg.To = f'"{name}" <{address}>'
 
-    # Add attachments based on number of tickets
     attached_files = []
     # for _ in range(num_tickets):
     #     if current_ticket_index < len(ticket_files):
