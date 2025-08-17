@@ -10,7 +10,7 @@ and [auto-email_sender](https://github.com/Tuna521/auto-email-sender)
 
 Open Extensions > Apps Script in your google sheet and put under files. Once saved, the button will appear in the tab bar as "Eactivities API > Refresh Sale List".
 
-![image](images\toolbar.png)
+![image](images/toolbar.png)
 
 This reads data from the the Imperial union shop without having to download the excel sheet every time. 
 
