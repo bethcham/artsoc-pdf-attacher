@@ -44,7 +44,7 @@ def process_pdf(pdf_file, csv_file, output_dir):
             output_pdf(pdf_reader, page_index, first_name, seat_numbers[seat-1], output_dir, show_name)
             page_index += 1 
             
-    input("Please check files in the folder 'output_tickets' to ensure they are correct. Press any key to continue...")
+    input("Please check files in the folder 'output_tickets' to ensure they are correct. Press enter to continue...")
 
 def output_pdf(pdf_reader, page_index, first_name, seat, output_dir, show_name):
     pdf_writer = PdfWriter()

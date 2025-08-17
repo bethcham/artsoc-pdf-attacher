@@ -2,7 +2,7 @@
 Takes a pdf and splits it into individual pages, then attaches each page to a personalised email. Created to do ticketing for ArtSoc at Imperial College London.
 
 Inspired by
-[seat-distributor](https://github.com/Tuna521/seat-distributor/blob/main/distributor.py)
+[seat-distributor](https://github.com/Tuna521/seat-distributor)
 and [auto-email_sender](https://github.com/Tuna521/auto-email-sender)
 
 ## Directory contents:
@@ -25,12 +25,12 @@ This reads data from the the Imperial union shop without having to download the 
 Clone the repo:
 ```
 git clone https://github.com/bethcham/artsoc-pdf-attacher.git
-pip install PyPDF2
+pip3 install PyPDF2
 ```
 
 For Windows only: 
 ```
-pip install pywin32
+pip3 install pywin32
 ```
 
 ## Running
