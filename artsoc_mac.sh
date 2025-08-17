@@ -4,4 +4,4 @@
 rm -f "output_tickets/"*
 
 python3 pdf_split.py
-python3 sender.py
+python3 sender_mac.py

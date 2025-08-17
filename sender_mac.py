@@ -1,9 +1,29 @@
 from csv import reader
-import win32com.client
 import os
 import tempfile
 import shutil
 import re
+import subprocess
+
+def create_mail_draft(subject, body_html, to_address, attachments):
+    applescript = f'''
+    set theSubject to "{subject}"
+    set theContent to "{body_html.replace('"', "'")}"
+    set theAddress to "{to_address}"
+    tell application "Mail"
+        set newMessage to make new outgoing message with properties {{subject:theSubject, content:theContent, visible:true}}
+        tell newMessage
+            make new to recipient at end of to recipients with properties {{address:theAddress}}
+    '''
+    for attachment in attachments:
+        applescript += f'\n            make new attachment with properties {{file name:"{os.path.abspath(attachment)}"}} at after the last paragraph'
+    applescript += '''
+        end tell
+        delay 1
+        save newMessage
+    end tell
+    '''
+    subprocess.run(['osascript', '-e', applescript])
 
 def render_email(template_content, show_name, location, committee, theatre_time, meet_up, library_time=None, committee2=None):
     email = template_content
@@ -164,27 +184,8 @@ for customer_info in customer_info_reader:
     if "noreply" in address.lower():
         address = ""
 
-    msg = outlook.CreateItem(0)
-    
-    for account in outlook.Session.Accounts:
-        if account.SmtpAddress == sender_email:
-            msg._oleobj_.Invoke(*(64209, 0, 8, 0, account))  # sets sender account, make sure you're logged in on outlook
-            break
-
-    msg.Subject = subject
-    msg.HTMLBody = custom_email
-    msg.To = f'"{name}" <{address}>'
-
     # Add attachments based on number of tickets
     attached_files = []
-    # for _ in range(num_tickets):
-    #     if current_ticket_index < len(ticket_files):
-    #         ticket_path = os.path.join(ticket_folder, ticket_files[current_ticket_index])
-    #         if os.path.exists(ticket_path):
-    #             msg.Attachments.Add(ticket_path)
-    #             attached_files.append(ticket_files[current_ticket_index])
-    #             current_ticket_index += 1
-
     for seat in seat_numbers[:num_tickets]:
         # Find ticket file matching both name and seat
         found = False
@@ -192,7 +193,6 @@ for customer_info in customer_info_reader:
             if name.lower() in ticket_file.lower() and seat and str(seat) in ticket_file:
                 ticket_path = os.path.join(ticket_folder, ticket_file)
                 if os.path.exists(ticket_path):
-                    msg.Attachments.Add(ticket_path)
                     attached_files.append(ticket_file)
                     available_tickets.remove(ticket_file)
                     current_ticket_index += 1
@@ -201,12 +201,11 @@ for customer_info in customer_info_reader:
         if not found:
             print(f"Warning: No ticket found for {name} (seat {seat})")
 
-    # saves as draft - go to outlook to check and send
-    msg.Save()
-    
+    # saves as draft - go to apple mail to check and send
+    create_mail_draft(subject, custom_email, address, attached_files)
     email_count += 1
-    # print(f"created draft email {email_count} for {address}")
-    # print(f"  attached tickets: {', '.join(attached_files)}")
+    print(f"created draft email {email_count} for {address}")
+    print(f"  attached tickets: {', '.join(attached_files)}")
 
 template_file.close()
 customer_info_file.close()
